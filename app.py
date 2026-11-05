@@ -260,7 +260,7 @@ def main():
 
     # --- SECCIÓN 4: DEBUTS POR AÑO ---
     st.header("4. Canteranos debutantes por año")
-    st.markdown("Cantidad de jugadores formados en casa que hicieron su debut en el primer equipo entre 2017 y 2026.")
+    st.markdown("Cantidad de jugadores formados en casa que hicieron su debut SOLO EN LIGA DE PRIMERA DIVISIÓN en el primer equipo entre 2017 y 2026.")
 
     # Filtrar canteranos y que su debut esté en el rango de la década
     df_debut = df[(df['canterano'] == 'SI') & (df['debut'] >= 2017) & (df['debut'] <= 2026)].drop_duplicates(subset=['jugador'])
