@@ -84,7 +84,7 @@ def main():
     )
 
     # --- GRÁFICO MACRO (Área al 100%) ---
-    st.header("La evolución de la confianza en la cantera")
+    st.header("1. La evolución de la confianza en la cantera")
 
     df_area = df.groupby(["temporada", "canterano"])["minutos"].sum().reset_index()
     df_area["total_temp"] = df_area.groupby("temporada")["minutos"].transform("sum")
@@ -129,23 +129,45 @@ def main():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Gráfico de barras
-    st.subheader("Top jugadores del año")
-    top_n = st.slider("Mostrar Top", 5, len(df_temp), min(15, len(df_temp)))
-    dff_graf = df_temp.nlargest(top_n, "minutos")
+    # --- MEJORA 2: MAPA DE POSICIONES Y TOP JUGADORES ---
+    col_izq, col_der = st.columns([3, 2])
 
-    chart_barras = alt.Chart(dff_graf).mark_bar().encode(
-        x=alt.X('minutos:Q', title='Minutos', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
-        y=alt.Y('jugador:N', sort='-x', title='', axis=alt.Axis(labelLimit=0, labelFontSize=14, labelColor='#000000', labelOpacity=1)),
-        color=alt.condition(
-            alt.datum.canterano == 'SI',
-            alt.value('#1E1E1E'),
-            alt.value('#B0B0B0')
-        ),
-        tooltip=['jugador', 'minutos', 'canterano']
-    ).properties(height=max(350, top_n * 30)).configure(background='transparent').configure_view(strokeWidth=0)
+    with col_izq:
+        st.subheader("Top jugadores del año")
+        top_n = st.slider("Mostrar Top", 5, len(df_temp), min(15, len(df_temp)))
+        dff_graf = df_temp.nlargest(top_n, "minutos")
 
-    st.altair_chart(chart_barras, use_container_width=True)
+        chart_barras = alt.Chart(dff_graf).mark_bar().encode(
+            x=alt.X('minutos:Q', title='Minutos', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
+            y=alt.Y('jugador:N', sort='-x', title='', axis=alt.Axis(labelLimit=0, labelFontSize=14, labelColor='#000000', labelOpacity=1)),
+            color=alt.condition(
+                alt.datum.canterano == 'SI',
+                alt.value('#1E1E1E'),
+                alt.value('#B0B0B0')
+            ),
+            tooltip=['jugador', 'minutos', 'canterano']
+        ).properties(height=max(350, top_n * 30)).configure(background='transparent').configure_view(strokeWidth=0)
+
+        st.altair_chart(chart_barras, use_container_width=True)
+
+    with col_der:
+        st.subheader("Minutos por Posición")
+
+        # Normalizar posiciones (tomar las primeras 2 letras: GK, DF, MF, FW)
+        df_temp["pos_base"] = df_temp["posicion"].str[:2]
+        df_pos = df_temp.groupby("pos_base")["minutos"].sum().reset_index()
+
+        # Mapear a nombres en español
+        map_pos = {"GK": "Arqueros", "DF": "Defensas", "MF": "Mediocampistas", "FW": "Delanteros"}
+        df_pos["pos_base"] = df_pos["pos_base"].map(map_pos).fillna("Otros")
+
+        chart_pos = alt.Chart(df_pos).mark_bar(color='#1E1E1E').encode(
+            x=alt.X('pos_base:N', title='', axis=alt.Axis(labelAngle=0, labelColor='#000000', titleColor='#000000', labelOpacity=1)),
+            y=alt.Y('minutos:Q', title='Minutos Totales', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
+            tooltip=['pos_base', alt.Tooltip('minutos:Q', format=',', title='Minutos')]
+        ).properties(height=350).configure(background='transparent').configure_view(strokeWidth=0)
+
+        st.altair_chart(chart_pos, use_container_width=True)
 
     # Tabla con ProgressColumn
     st.subheader("Detalle del Plantel")
@@ -177,7 +199,7 @@ def main():
     # --- SECCIÓN 3: LOS JUGADORES ---
     st.header("3. El impacto individual")
 
-    col_top, col_buscar = st.columns(2)
+    col_top, col_comparar = st.columns(2)
 
     with col_top:
         st.subheader("Top 10 Histórico (2017-2026)")
@@ -192,33 +214,49 @@ def main():
         ).properties(height=400).configure(background='transparent').configure_view(strokeWidth=0)
         st.altair_chart(chart_top10, use_container_width=True)
 
-    with col_buscar:
-        st.subheader("Buscador de Jugadores")
-        st.markdown("Analiza la trayectoria de cualquier jugador en el tiempo.")
+    # --- MEJORA 1: COMPARADOR HEAD-TO-HEAD ---
+    with col_comparar:
+        st.subheader("Comparador de Jugadores")
+        st.markdown("Compara la evolución de dos jugadores en el tiempo.")
+
         lista_jugadores = sorted(df["jugador"].unique())
-        jugador_sel = st.selectbox("Escribe o selecciona un jugador:", lista_jugadores)
 
-        df_jugador = df[df["jugador"] == jugador_sel]
+        # Dos selectores en la misma fila
+        col_j1, col_j2 = st.columns(2)
+        with col_j1:
+            jugador_1 = st.selectbox("Jugador 1:", lista_jugadores, index=0)
+        with col_j2:
+            # Por defecto elegimos el segundo jugador de la lista para que no choquen
+            jugador_2 = st.selectbox("Jugador 2:", lista_jugadores, index=1)
+
+        # Crear DataFrame con el rango de años
         años_rango = sorted(df["temporada"].unique())
-        df_jugador_full = pd.DataFrame({"temporada": años_rango})
-        df_jugador_full = df_jugador_full.merge(df_jugador[["temporada", "minutos"]], on="temporada", how="left")
-        df_jugador_full["minutos"] = df_jugador_full["minutos"].fillna(0)
+        df_comp = pd.DataFrame({"temporada": años_rango})
 
-        debut = df_jugador["debut"].iloc[0] if not df_jugador["debut"].isna().all() else "N/D"
-        es_canterano = df_jugador["canterano"].iloc[0]
-        nota = df_jugador["nota"].iloc[0] if pd.notna(df_jugador["nota"].iloc[0]) else "Sin información adicional"
+        # Extraer datos del Jugador 1 y rellenar vacíos
+        df_j1 = df[df["jugador"] == jugador_1][["temporada", "minutos"]].rename(columns={"minutos": jugador_1})
+        df_comp = df_comp.merge(df_j1, on="temporada", how="left").fillna({jugador_1: 0})
 
-        st.info(f"**Debut:** {int(debut) if debut != 'N/D' else 'No registrado'} | **Canterano:** {es_canterano} | **Info:** {nota}")
+        # Extraer datos del Jugador 2 y rellenar vacíos
+        df_j2 = df[df["jugador"] == jugador_2][["temporada", "minutos"]].rename(columns={"minutos": jugador_2})
+        df_comp = df_comp.merge(df_j2, on="temporada", how="left").fillna({jugador_2: 0})
 
-        chart_jugador = alt.Chart(df_jugador_full).mark_line(
-            color='#1E1E1E', point=alt.OverlayMarkDef(color='#1E1E1E', size=60), strokeWidth=3
+        # Transformar a formato largo para Altair
+        df_long = df_comp.melt(id_vars=["temporada"], var_name="Jugador", value_name="minutos")
+
+        # Gráfico de líneas comparativo
+        chart_comp = alt.Chart(df_long).mark_line(
+            point=alt.OverlayMarkDef(size=60), strokeWidth=3
         ).encode(
             x=alt.X('temporada:O', title='', axis=alt.Axis(labelAngle=0, labelColor='#000000', titleColor='#000000', labelOpacity=1)),
             y=alt.Y('minutos:Q', title='Minutos en Liga', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
-            tooltip=['temporada', 'minutos']
-        ).properties(height=280).configure(background='transparent').configure_view(strokeWidth=0)
+            color=alt.Color('Jugador:N',
+                            scale=alt.Scale(range=['#1E1E1E', '#888888']), # Negro y Gris
+                            legend=alt.Legend(labelColor='#000000', titleColor='#000000')),
+            tooltip=['temporada', 'Jugador', alt.Tooltip('minutos:Q', format=',')]
+        ).properties(height=300).configure(background='transparent').configure_view(strokeWidth=0)
 
-        st.altair_chart(chart_jugador, use_container_width=True)
+        st.altair_chart(chart_comp, use_container_width=True)
 
 
 if __name__ == "__main__":
