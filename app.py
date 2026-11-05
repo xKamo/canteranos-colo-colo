@@ -30,7 +30,7 @@ def aplicar_estilos():
 
         .insight-box {
             background-color: #1E1E1E;
-            color: #000000 !important;
+            color: #FAFAFA !important;
             padding: 20px;
             border-radius: 10px;
             font-size: 1.4rem;
@@ -50,7 +50,6 @@ def aplicar_estilos():
 
 
 def main():
-    # Configurar página con favicon (usa el logo)
     if os.path.exists(RUTA_LOGO):
         st.set_page_config(page_title="Canteranos Colo-Colo", layout="wide", page_icon=RUTA_LOGO)
     else:
@@ -79,7 +78,7 @@ def main():
 
     st.markdown(
         f'<div class="insight-box">'
-        f'En la última década, los jugadores formados en casa han disputado el <span style="color: #555555;">{pct_historico:.1f}%</span> de los minutos totales en Primera División.'
+        f'En la última década, los jugadores formados en casa han disputado el <span style="color: #A0A0A0;">{pct_historico:.1f}%</span> de los minutos totales en Primera División.'
         f'</div>',
         unsafe_allow_html=True
     )
@@ -92,12 +91,12 @@ def main():
     df_area["porcentaje"] = (df_area["minutos"] / df_area["total_temp"]) * 100
 
     chart_area = alt.Chart(df_area).mark_area().encode(
-        x=alt.X('temporada:O', title='', axis=alt.Axis(labelAngle=0, labelColor='#A0A0A0', titleColor='#A0A0A0')),
-        y=alt.Y('porcentaje:Q', title='% de Minutos del Plantel', stack='normalize', axis=alt.Axis(labelColor='#A0A0A0', titleColor='#A0A0A0', gridColor='#333333')),
+        x=alt.X('temporada:O', title='', axis=alt.Axis(labelAngle=0, labelColor='#000000', titleColor='#000000', labelOpacity=1)),
+        y=alt.Y('porcentaje:Q', title='% de Minutos del Plantel', stack='normalize', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
         color=alt.Color('canterano:N',
-                        scale=alt.Scale(domain=['SI', 'NO'], range=['#FFFFFF', '#444444']),
+                        scale=alt.Scale(domain=['SI', 'NO'], range=['#1E1E1E', '#B0B0B0']),
                         title='¿Es Canterano?',
-                        legend=alt.Legend(labelColor='#FAFAFA', titleColor='#FAFAFA')),
+                        legend=alt.Legend(labelColor='#000000', titleColor='#000000')),
         tooltip=['temporada', 'canterano', alt.Tooltip('porcentaje:Q', format='.1f', title='% Minutos')]
     ).properties(height=400).configure(background='transparent').configure_view(strokeWidth=0)
 
@@ -136,12 +135,12 @@ def main():
     dff_graf = df_temp.nlargest(top_n, "minutos")
 
     chart_barras = alt.Chart(dff_graf).mark_bar().encode(
-        x=alt.X('minutos:Q', title='Minutos', axis=alt.Axis(labelColor='#A0A0A0', titleColor='#A0A0A0', gridColor='#333333')),
-        y=alt.Y('jugador:N', sort='-x', title='', axis=alt.Axis(labelLimit=0, labelFontSize=14, labelColor='#FAFAFA')),
+        x=alt.X('minutos:Q', title='Minutos', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
+        y=alt.Y('jugador:N', sort='-x', title='', axis=alt.Axis(labelLimit=0, labelFontSize=14, labelColor='#000000', labelOpacity=1)),
         color=alt.condition(
             alt.datum.canterano == 'SI',
-            alt.value('#FFFFFF'),
-            alt.value('#555555')
+            alt.value('#1E1E1E'),
+            alt.value('#B0B0B0')
         ),
         tooltip=['jugador', 'minutos', 'canterano']
     ).properties(height=max(350, top_n * 30)).configure(background='transparent').configure_view(strokeWidth=0)
@@ -186,9 +185,9 @@ def main():
         df_top10 = df[df["canterano"] == "SI"].groupby("jugador")["minutos"].sum().reset_index()
         df_top10 = df_top10.nlargest(10, "minutos")
 
-        chart_top10 = alt.Chart(df_top10).mark_bar(color='#FFFFFF').encode(
-            x=alt.X('minutos:Q', title='Minutos Totales', axis=alt.Axis(labelColor='#A0A0A0', titleColor='#A0A0A0', gridColor='#333333')),
-            y=alt.Y('jugador:N', sort='-x', title='', axis=alt.Axis(labelLimit=0, labelFontSize=13, labelColor='#FAFAFA')),
+        chart_top10 = alt.Chart(df_top10).mark_bar(color='#1E1E1E').encode(
+            x=alt.X('minutos:Q', title='Minutos Totales', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
+            y=alt.Y('jugador:N', sort='-x', title='', axis=alt.Axis(labelLimit=0, labelFontSize=13, labelColor='#000000', labelOpacity=1)),
             tooltip=['jugador', alt.Tooltip('minutos:Q', format=',')]
         ).properties(height=400).configure(background='transparent').configure_view(strokeWidth=0)
         st.altair_chart(chart_top10, use_container_width=True)
@@ -212,10 +211,10 @@ def main():
         st.info(f"**Debut:** {int(debut) if debut != 'N/D' else 'No registrado'} | **Canterano:** {es_canterano} | **Info:** {nota}")
 
         chart_jugador = alt.Chart(df_jugador_full).mark_line(
-            color='#FFFFFF', point=alt.OverlayMarkDef(color='#FFFFFF', size=60), strokeWidth=3
+            color='#1E1E1E', point=alt.OverlayMarkDef(color='#1E1E1E', size=60), strokeWidth=3
         ).encode(
-            x=alt.X('temporada:O', title='', axis=alt.Axis(labelAngle=0, labelColor='#A0A0A0', titleColor='#A0A0A0')),
-            y=alt.Y('minutos:Q', title='Minutos en Liga', axis=alt.Axis(labelColor='#A0A0A0', titleColor='#A0A0A0', gridColor='#333333')),
+            x=alt.X('temporada:O', title='', axis=alt.Axis(labelAngle=0, labelColor='#000000', titleColor='#000000', labelOpacity=1)),
+            y=alt.Y('minutos:Q', title='Minutos en Liga', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
             tooltip=['temporada', 'minutos']
         ).properties(height=280).configure(background='transparent').configure_view(strokeWidth=0)
 
