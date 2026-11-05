@@ -73,7 +73,7 @@ def main():
     if os.path.exists(RUTA_LOGO):
         st.set_page_config(page_title="Canteranos Colo-Colo", layout="wide", page_icon=RUTA_LOGO)
     else:
-        st.set_page_config(page_title="Canteranos Colo-Colo", layout="wide", page_icon="⚫")
+        st.set_page_config(page_title="Canteranos Colo-Colo", layout="wide", page_icon="⚽")
 
     aplicar_estilos()
 
