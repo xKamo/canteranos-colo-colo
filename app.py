@@ -30,7 +30,7 @@ def aplicar_estilos():
 
         .insight-box {
             background-color: #1E1E1E;
-            color: #FAFAFA !important;
+            color: #000000 !important;
             padding: 20px;
             border-radius: 10px;
             font-size: 1.4rem;
