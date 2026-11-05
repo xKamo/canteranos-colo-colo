@@ -21,24 +21,23 @@ def cargar_datos():
 def aplicar_estilos():
     st.markdown("""
         <style>
-        /* Ajuste automático de tarjetas y métricas según el tema de Streamlit */
         div[data-testid="metric-container"] {
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-            border-top: 6px solid #000000;
+            border-top: 6px solid #1E1E1E;
         }
 
-        /* Caja de insight adaptable */
         .insight-box {
+            background-color: #1E1E1E;
+            color: #FAFAFA !important;
             padding: 20px;
             border-radius: 10px;
             font-size: 1.4rem;
             font-weight: 600;
             text-align: center;
             margin-bottom: 30px;
-            box-shadow: 0 6px 12px rgba(0,0,0,0.06);
-            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
         }
 
         hr {
