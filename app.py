@@ -30,11 +30,11 @@ def aplicar_estilos():
         #MainMenu { visibility: hidden; }
         footer { visibility: hidden; }
 
-        /* TIPOGRAFÍA CLARA */
-        h1 { color: #FAFAFA; font-family: 'Helvetica Neue', sans-serif; font-weight: 900; margin-bottom: 0px;}
-        h2 { color: #E0E0E0; font-weight: 700; margin-top: 10px;}
-        h3 { color: #CCCCCC; font-weight: 600;}
-        p, label { font-size: 1.1rem; color: #A0A0A0 !important; }
+        /* TIPOGRAFÍA CLARA FORZADA */
+        h1 { color: #FAFAFA !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 900; margin-bottom: 0px;}
+        h2 { color: #E0E0E0 !important; font-weight: 700; margin-top: 10px;}
+        h3 { color: #CCCCCC !important; font-weight: 600;}
+        p, label, .stMarkdown p { font-size: 1.1rem; color: #A0A0A0 !important; }
 
         /* TARJETAS DE MÉTRICAS */
         div[data-testid="metric-container"] {
@@ -44,12 +44,13 @@ def aplicar_estilos():
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             border-top: 6px solid #FFFFFF;
         }
-        div[data-testid="metric-container"] > div { color: #FAFAFA; }
+        div[data-testid="metric-container"] > div,
+        div[data-testid="metric-container"] > div > div { color: #FAFAFA !important; }
 
         /* CAJA DE INSIGHT (Invertida para contrastar) */
         .insight-box {
             background-color: #FFFFFF;
-            color: #000000;
+            color: #000000 !important;
             padding: 20px;
             border-radius: 10px;
             font-size: 1.4rem;
@@ -62,8 +63,9 @@ def aplicar_estilos():
         hr { margin-top: 40px; margin-bottom: 40px; border-top: 1px solid #333333; }
 
         /* SELECTBOXES Y SLIDERS OSCUROS */
-        div[data-baseweb="select"] > div { background-color: #1E1E1E; color: white; border-color: #444; }
+        div[data-baseweb="select"] > div { background-color: #1E1E1E !important; color: white !important; border-color: #444 !important; }
         div[role="slider"] { background-color: #FFFFFF !important; }
+        .stSlider label { color: #A0A0A0 !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -104,7 +106,7 @@ def main():
     )
 
     # --- GRÁFICO MACRO (Área al 100%) ---
-    st.header("1. La evolución de la confianza en la cantera")
+    st.header("La evolución de la confianza en la cantera")
 
     df_area = df.groupby(["temporada", "canterano"])["minutos"].sum().reset_index()
     df_area["total_temp"] = df_area.groupby("temporada")["minutos"].transform("sum")
@@ -114,7 +116,7 @@ def main():
         x=alt.X('temporada:O', title='', axis=alt.Axis(labelAngle=0, labelColor='#A0A0A0', titleColor='#A0A0A0')),
         y=alt.Y('porcentaje:Q', title='% de Minutos del Plantel', stack='normalize', axis=alt.Axis(labelColor='#A0A0A0', titleColor='#A0A0A0', gridColor='#333333')),
         color=alt.Color('canterano:N',
-                        scale=alt.Scale(domain=['SI', 'NO'], range=['#FFFFFF', '#444444']), # Blanco para canteranos, gris oscuro para el resto
+                        scale=alt.Scale(domain=['SI', 'NO'], range=['#FFFFFF', '#444444']),
                         title='¿Es Canterano?',
                         legend=alt.Legend(labelColor='#FAFAFA', titleColor='#FAFAFA')),
         tooltip=['temporada', 'canterano', alt.Tooltip('porcentaje:Q', format='.1f', title='% Minutos')]
@@ -159,8 +161,8 @@ def main():
         y=alt.Y('jugador:N', sort='-x', title='', axis=alt.Axis(labelLimit=0, labelFontSize=14, labelColor='#FAFAFA')),
         color=alt.condition(
             alt.datum.canterano == 'SI',
-            alt.value('#FFFFFF'), # Blanco
-            alt.value('#555555')  # Gris oscuro
+            alt.value('#FFFFFF'),
+            alt.value('#555555')
         ),
         tooltip=['jugador', 'minutos', 'canterano']
     ).properties(height=max(350, top_n * 30)).configure(background='transparent').configure_view(strokeWidth=0)
@@ -171,7 +173,6 @@ def main():
     st.subheader("Detalle del Plantel")
     columnas = ["jugador", "posicion", "minutos", "canterano", "debut", "nota"]
 
-    # Calcular el máximo de minutos del año para escalar las barras (la barra del que más jugó será 100%)
     max_minutos_temp = int(df_temp["minutos"].max()) if not df_temp.empty else 1
 
     st.dataframe(
@@ -181,7 +182,6 @@ def main():
         column_config={
             "jugador": "Jugador",
             "posicion": "Posición",
-            # BARRAS DE PROGRESO
             "minutos": st.column_config.ProgressColumn(
                 "Minutos",
                 format="%d",
@@ -230,7 +230,6 @@ def main():
         es_canterano = df_jugador["canterano"].iloc[0]
         nota = df_jugador["nota"].iloc[0] if pd.notna(df_jugador["nota"].iloc[0]) else "Sin información adicional"
 
-        # Ficha visual oscura
         st.info(f"**Debut:** {int(debut) if debut != 'N/D' else 'No registrado'} | **Canterano:** {es_canterano} | **Info:** {nota}")
 
         chart_jugador = alt.Chart(df_jugador_full).mark_line(
