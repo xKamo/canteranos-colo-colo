@@ -6,7 +6,7 @@ import os
 # Rutas de datos
 RUTA_DATA = "data/data.csv"
 RUTA_JUGADORES = "data/jugadores.csv"
-RUTA_LOGO = "assets/logo.png"
+RUTA_LOGO = "static/logo.png"
 
 @st.cache_data
 def cargar_datos():
@@ -83,7 +83,7 @@ def main():
     col_logo, col_titulo = st.columns([1, 6])
     with col_logo:
         if os.path.exists(RUTA_LOGO):
-            st.image(RUTA_LOGO, width=120)
+            st.markdown('<img src="app/static/logo.png" width="120">', unsafe_allow_html=True)
     with col_titulo:
         st.title("Canteranos de Colo-Colo")
         st.subheader("Análisis de minutos en Primera División (2017-2026)")
