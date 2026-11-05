@@ -1,17 +1,10 @@
 [theme]
-base = "light"  # Tema por defecto al entrar
-
-[theme.light]
+base = "light"
 primaryColor = "#000000"
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F0F0"
+secondaryBackgroundColor = "#F4F4F4"
 textColor = "#1E1E1E"
-
-[theme.dark]
-primaryColor = "#FFFFFF"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#1E1E1E"
-textColor = "#FAFAFA"
+font = "sans serif"
 
 [server]
 enableStaticServing = true

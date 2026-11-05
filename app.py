@@ -21,51 +21,31 @@ def cargar_datos():
 def aplicar_estilos():
     st.markdown("""
         <style>
-        /* FONDO OSCURO */
-        .stApp { background-color: #0E1117; }
-
-        /* ELIMINAR ESPACIO SUPERIOR */
-        header { display: none !important; }
-        .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
-        #MainMenu { visibility: hidden; }
-        footer { visibility: hidden; }
-
-        /* TIPOGRAFÍA CLARA FORZADA */
-        h1 { color: #FAFAFA !important; font-family: 'Helvetica Neue', sans-serif; font-weight: 900; margin-bottom: 0px;}
-        h2 { color: #E0E0E0 !important; font-weight: 700; margin-top: 10px;}
-        h3 { color: #CCCCCC !important; font-weight: 600;}
-        p, label, .stMarkdown p { font-size: 1.1rem; color: #A0A0A0 !important; }
-
-        /* TARJETAS DE MÉTRICAS */
+        /* Ajuste automático de tarjetas y métricas según el tema de Streamlit */
         div[data-testid="metric-container"] {
-            background-color: #1E1E1E;
             padding: 20px;
             border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            border-top: 6px solid #FFFFFF;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+            border-top: 6px solid #000000;
         }
-        div[data-testid="metric-container"] > div,
-        div[data-testid="metric-container"] > div > div { color: #FAFAFA !important; }
 
-        /* CAJA DE INSIGHT (Invertida para contrastar) */
+        /* Caja de insight adaptable */
         .insight-box {
-            background-color: #FFFFFF;
-            color: #000000 !important;
             padding: 20px;
             border-radius: 10px;
             font-size: 1.4rem;
             font-weight: 600;
             text-align: center;
             margin-bottom: 30px;
-            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.06);
+            border: 1px solid rgba(0,0,0,0.1);
         }
 
-        hr { margin-top: 40px; margin-bottom: 40px; border-top: 1px solid #333333; }
-
-        /* SELECTBOXES Y SLIDERS OSCUROS */
-        div[data-baseweb="select"] > div { background-color: #1E1E1E !important; color: white !important; border-color: #444 !important; }
-        div[role="slider"] { background-color: #FFFFFF !important; }
-        .stSlider label { color: #A0A0A0 !important; }
+        hr {
+            margin-top: 40px;
+            margin-bottom: 40px;
+            border-top: 1px solid rgba(128,128,128,0.2);
+        }
         </style>
     """, unsafe_allow_html=True)
 
