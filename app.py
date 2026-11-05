@@ -129,7 +129,7 @@ def main():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- MEJORA 2: MAPA DE POSICIONES Y TOP JUGADORES ---
+    # --- MAPA DE POSICIONES Y TOP JUGADORES ---
     col_izq, col_der = st.columns([3, 2])
 
     with col_izq:
@@ -214,7 +214,6 @@ def main():
         ).properties(height=400).configure(background='transparent').configure_view(strokeWidth=0)
         st.altair_chart(chart_top10, use_container_width=True)
 
-    # --- MEJORA 1: COMPARADOR HEAD-TO-HEAD ---
     with col_comparar:
         st.subheader("Comparador de Jugadores")
         st.markdown("Compara la evolución de dos jugadores en el tiempo.")
@@ -226,7 +225,6 @@ def main():
         with col_j1:
             jugador_1 = st.selectbox("Jugador 1:", lista_jugadores, index=0)
         with col_j2:
-            # Por defecto elegimos el segundo jugador de la lista para que no choquen
             jugador_2 = st.selectbox("Jugador 2:", lista_jugadores, index=1)
 
         # Crear DataFrame con el rango de años
@@ -257,6 +255,32 @@ def main():
         ).properties(height=300).configure(background='transparent').configure_view(strokeWidth=0)
 
         st.altair_chart(chart_comp, use_container_width=True)
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # --- SECCIÓN 4: DEBUTS POR AÑO ---
+    st.header("4. Canteranos debutantes por año")
+    st.markdown("Cantidad de jugadores formados en casa que hicieron su debut en el primer equipo entre 2017 y 2026.")
+
+    # Filtrar canteranos y que su debut esté en el rango de la década
+    df_debut = df[(df['canterano'] == 'SI') & (df['debut'] >= 2017) & (df['debut'] <= 2026)].drop_duplicates(subset=['jugador'])
+
+    # Contar por año
+    debuts_por_año = df_debut.groupby('debut').size().reset_index(name='cantidad')
+
+    # Asegurarnos de que estén todos los años, incluso si no hubo debuts
+    años_rango = sorted(df["temporada"].unique())
+    df_debut_full = pd.DataFrame({"debut": años_rango})
+    df_debut_full = df_debut_full.merge(debuts_por_año, on="debut", how="left").fillna(0)
+    df_debut_full['debut'] = df_debut_full['debut'].astype(int).astype(str) # Para que no salga "2017.0"
+
+    chart_debuts = alt.Chart(df_debut_full).mark_bar(color='#1E1E1E').encode(
+        x=alt.X('debut:O', title='Año de Debut', axis=alt.Axis(labelAngle=0, labelColor='#000000', titleColor='#000000', labelOpacity=1)),
+        y=alt.Y('cantidad:Q', title='Cantidad de Jugadores', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
+        tooltip=['debut', alt.Tooltip('cantidad:Q', format='.0f', title='Jugadores')]
+    ).properties(height=300).configure(background='transparent').configure_view(strokeWidth=0)
+
+    st.altair_chart(chart_debuts, use_container_width=True)
 
 
 if __name__ == "__main__":
