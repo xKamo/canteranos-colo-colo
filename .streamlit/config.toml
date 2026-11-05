@@ -1,5 +1,5 @@
 [theme]
-base = "dark"  # Tema por defecto al entrar
+base = "light"  # Tema por defecto al entrar
 
 [theme.light]
 primaryColor = "#000000"
