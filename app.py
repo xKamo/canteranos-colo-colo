@@ -27,7 +27,6 @@ def aplicar_estilos():
             box-shadow: 0 4px 10px rgba(0,0,0,0.08);
             border-top: 6px solid #1E1E1E;
         }
-
         .insight-box {
             background-color: #1E1E1E;
             color: #FAFAFA !important;
@@ -39,7 +38,6 @@ def aplicar_estilos():
             margin-bottom: 30px;
             box-shadow: 0 6px 12px rgba(0,0,0,0.1);
         }
-
         hr {
             margin-top: 40px;
             margin-bottom: 40px;
@@ -49,6 +47,33 @@ def aplicar_estilos():
     """, unsafe_allow_html=True)
 
 
+def generar_grafico_comparacion(df, jugador_1, jugador_2):
+    """Función auxiliar para no repetir el código del gráfico de líneas"""
+    años_rango = sorted(df["temporada"].unique())
+    df_comp = pd.DataFrame({"temporada": años_rango})
+
+    df_j1 = df[df["jugador"] == jugador_1][["temporada", "minutos"]].rename(columns={"minutos": jugador_1})
+    df_comp = df_comp.merge(df_j1, on="temporada", how="left").fillna({jugador_1: 0})
+
+    df_j2 = df[df["jugador"] == jugador_2][["temporada", "minutos"]].rename(columns={"minutos": jugador_2})
+    df_comp = df_comp.merge(df_j2, on="temporada", how="left").fillna({jugador_2: 0})
+
+    df_long = df_comp.melt(id_vars=["temporada"], var_name="Jugador", value_name="minutos")
+
+    chart = alt.Chart(df_long).mark_line(
+        point=alt.OverlayMarkDef(size=60), strokeWidth=3
+    ).encode(
+        x=alt.X('temporada:O', title='', axis=alt.Axis(labelAngle=0, labelColor='#000000', titleColor='#000000', labelOpacity=1)),
+        y=alt.Y('minutos:Q', title='Minutos en Liga', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
+        color=alt.Color('Jugador:N',
+                        scale=alt.Scale(range=['#1E1E1E', '#888888']),
+                        legend=alt.Legend(labelColor='#000000', titleColor='#000000')),
+        tooltip=['temporada', 'Jugador', alt.Tooltip('minutos:Q', format=',')]
+    ).properties(height=350).configure(background='transparent').configure_view(strokeWidth=0)
+
+    return chart
+
+
 def main():
     if os.path.exists(RUTA_LOGO):
         st.set_page_config(page_title="Canteranos Colo-Colo", layout="wide", page_icon=RUTA_LOGO)
@@ -56,7 +81,6 @@ def main():
         st.set_page_config(page_title="Canteranos Colo-Colo", layout="wide", page_icon="⚽")
 
     aplicar_estilos()
-
     df = cargar_datos()
 
     # --- CABECERA ---
@@ -83,7 +107,7 @@ def main():
         unsafe_allow_html=True
     )
 
-    # --- GRÁFICO MACRO (Área al 100%) ---
+    # --- SECCIÓN 1: GRÁFICO MACRO (ARREGLADO) ---
     st.header("1. La evolución de la confianza en la cantera")
 
     df_area = df.groupby(["temporada", "canterano"])["minutos"].sum().reset_index()
@@ -97,6 +121,8 @@ def main():
                         scale=alt.Scale(domain=['SI', 'NO'], range=['#1E1E1E', '#B0B0B0']),
                         title='¿Es Canterano?',
                         legend=alt.Legend(labelColor='#000000', titleColor='#000000')),
+        # ESTA ES LA LÍNEA MÁGICA PARA QUE EL NEGRO VAYA ABAJO
+        order=alt.Order('canterano', sort='descending'),
         tooltip=['temporada', 'canterano', alt.Tooltip('porcentaje:Q', format='.1f', title='% Minutos')]
     ).properties(height=400).configure(background='transparent').configure_view(strokeWidth=0)
 
@@ -129,7 +155,6 @@ def main():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- MAPA DE POSICIONES Y TOP JUGADORES ---
     col_izq, col_der = st.columns([3, 2])
 
     with col_izq:
@@ -152,12 +177,8 @@ def main():
 
     with col_der:
         st.subheader("Minutos por Posición")
-
-        # Normalizar posiciones (tomar las primeras 2 letras: GK, DF, MF, FW)
         df_temp["pos_base"] = df_temp["posicion"].str[:2]
         df_pos = df_temp.groupby("pos_base")["minutos"].sum().reset_index()
-
-        # Mapear a nombres en español
         map_pos = {"GK": "Arqueros", "DF": "Defensas", "MF": "Mediocampistas", "FW": "Delanteros"}
         df_pos["pos_base"] = df_pos["pos_base"].map(map_pos).fillna("Otros")
 
@@ -169,10 +190,8 @@ def main():
 
         st.altair_chart(chart_pos, use_container_width=True)
 
-    # Tabla con ProgressColumn
     st.subheader("Detalle del Plantel")
     columnas = ["jugador", "posicion", "minutos", "canterano", "debut", "nota"]
-
     max_minutos_temp = int(df_temp["minutos"].max()) if not df_temp.empty else 1
 
     st.dataframe(
@@ -183,10 +202,7 @@ def main():
             "jugador": "Jugador",
             "posicion": "Posición",
             "minutos": st.column_config.ProgressColumn(
-                "Minutos",
-                format="%d",
-                min_value=0,
-                max_value=max_minutos_temp,
+                "Minutos", format="%d", min_value=0, max_value=max_minutos_temp,
             ),
             "canterano": "Canterano",
             "debut": st.column_config.NumberColumn("Año Debut", format="%d"),
@@ -196,10 +212,10 @@ def main():
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # --- SECCIÓN 3: LOS JUGADORES ---
+    # --- SECCIÓN 3: LOS JUGADORES (MEJORADO CON TABS) ---
     st.header("3. El impacto individual")
 
-    col_top, col_comparar = st.columns(2)
+    col_top, col_comparar = st.columns([1, 1])
 
     with col_top:
         st.subheader("Top 10 Histórico (2017-2026)")
@@ -216,63 +232,72 @@ def main():
 
     with col_comparar:
         st.subheader("Comparador de Jugadores")
-        st.markdown("Compara la evolución de dos jugadores en el tiempo.")
 
-        lista_jugadores = sorted(df["jugador"].unique())
+        # Creamos las dos pestañas
+        tab1, tab2 = st.tabs(["Canterano vs Canterano", "Canterano vs No Canterano"])
 
-        # Dos selectores en la misma fila
-        col_j1, col_j2 = st.columns(2)
-        with col_j1:
-            jugador_1 = st.selectbox("Jugador 1:", lista_jugadores, index=0)
-        with col_j2:
-            jugador_2 = st.selectbox("Jugador 2:", lista_jugadores, index=1)
+        # --- TAB 1: CANTERANO VS CANTERANO ---
+        with tab1:
+            st.markdown("Compara la evolución de dos jugadores formados en casa.")
+            df_cant = df[df["canterano"] == "SI"]
+            lista_cant = sorted(df_cant["jugador"].unique())
 
-        # Crear DataFrame con el rango de años
-        años_rango = sorted(df["temporada"].unique())
-        df_comp = pd.DataFrame({"temporada": años_rango})
+            c_j1, c_j2 = st.columns(2)
+            with c_j1:
+                j1 = st.selectbox("Canterano 1:", lista_cant, index=0, key="cant1")
+            with c_j2:
+                j2 = st.selectbox("Canterano 2:", lista_cant, index=1, key="cant2")
 
-        # Extraer datos del Jugador 1 y rellenar vacíos
-        df_j1 = df[df["jugador"] == jugador_1][["temporada", "minutos"]].rename(columns={"minutos": jugador_1})
-        df_comp = df_comp.merge(df_j1, on="temporada", how="left").fillna({jugador_1: 0})
+            st.altair_chart(generar_grafico_comparacion(df, j1, j2), use_container_width=True)
 
-        # Extraer datos del Jugador 2 y rellenar vacíos
-        df_j2 = df[df["jugador"] == jugador_2][["temporada", "minutos"]].rename(columns={"minutos": jugador_2})
-        df_comp = df_comp.merge(df_j2, on="temporada", how="left").fillna({jugador_2: 0})
+        # --- TAB 2: CANTERANO VS NO CANTERANO ---
+        with tab2:
+            st.markdown("Compara a un canterano con un jugador externo. Puedes filtrar por posición.")
 
-        # Transformar a formato largo para Altair
-        df_long = df_comp.melt(id_vars=["temporada"], var_name="Jugador", value_name="minutos")
+            # Selector de posición
+            pos_sel = st.selectbox("Filtrar por Posición:", ["Todas", "Arqueros", "Defensas", "Mediocampistas", "Delanteros"])
 
-        # Gráfico de líneas comparativo
-        chart_comp = alt.Chart(df_long).mark_line(
-            point=alt.OverlayMarkDef(size=60), strokeWidth=3
-        ).encode(
-            x=alt.X('temporada:O', title='', axis=alt.Axis(labelAngle=0, labelColor='#000000', titleColor='#000000', labelOpacity=1)),
-            y=alt.Y('minutos:Q', title='Minutos en Liga', axis=alt.Axis(labelColor='#000000', titleColor='#000000', gridColor='#CCCCCC', labelOpacity=1)),
-            color=alt.Color('Jugador:N',
-                            scale=alt.Scale(range=['#1E1E1E', '#888888']), # Negro y Gris
-                            legend=alt.Legend(labelColor='#000000', titleColor='#000000')),
-            tooltip=['temporada', 'Jugador', alt.Tooltip('minutos:Q', format=',')]
-        ).properties(height=300).configure(background='transparent').configure_view(strokeWidth=0)
+            # Filtro de base
+            df_filt = df.copy()
+            if pos_sel != "Todas":
+                mapa_pos = {"Arqueros": "GK", "Defensas": "DF", "Mediocampistas": "MF", "Delanteros": "FW"}
+                df_filt = df_filt[df_filt["posicion"].str.startswith(mapa_pos[pos_sel])]
 
-        st.altair_chart(chart_comp, use_container_width=True)
+            # Listas filtradas
+            lista_c = sorted(df_filt[df_filt["canterano"] == "SI"]["jugador"].unique())
+            lista_nc = sorted(df_filt[df_filt["canterano"] == "NO"]["jugador"].unique())
+
+            c_jc, c_jnc = st.columns(2)
+            with c_jc:
+                # Manejo de error por si el filtro deja la lista vacía
+                if lista_c:
+                    jc = st.selectbox("Canterano:", lista_c, index=0, key="comp_c")
+                else:
+                    st.warning("No hay canteranos en esta posición.")
+                    jc = None
+            with c_jnc:
+                if lista_nc:
+                    jnc = st.selectbox("No Canterano:", lista_nc, index=0, key="comp_nc")
+                else:
+                    st.warning("No hay no canteranos en esta posición.")
+                    jnc = None
+
+            if jc and jnc:
+                st.altair_chart(generar_grafico_comparacion(df, jc, jnc), use_container_width=True)
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
     # --- SECCIÓN 4: DEBUTS POR AÑO ---
     st.header("4. Canteranos debutantes por año")
-    st.markdown("Cantidad de jugadores formados en casa que hicieron su debut SOLO EN LIGA DE PRIMERA DIVISIÓN en el primer equipo entre 2017 y 2026.")
+    st.markdown("Cantidad de jugadores formados en casa que hicieron su debut en el primer equipo entre 2017 y 2026.")
 
-    # Filtrar canteranos y que su debut esté en el rango de la década
     df_debut = df[(df['canterano'] == 'SI') & (df['debut'] >= 2017) & (df['debut'] <= 2026)].drop_duplicates(subset=['jugador'])
-
-    # Contar por año
     debuts_por_año = df_debut.groupby('debut').size().reset_index(name='cantidad')
 
-    # Asegurarnos de que estén todos los años, incluso si no hubo debuts
     años_rango = sorted(df["temporada"].unique())
     df_debut_full = pd.DataFrame({"debut": años_rango})
     df_debut_full = df_debut_full.merge(debuts_por_año, on="debut", how="left").fillna(0)
-    df_debut_full['debut'] = df_debut_full['debut'].astype(int).astype(str) # Para que no salga "2017.0"
+    df_debut_full['debut'] = df_debut_full['debut'].astype(int).astype(str)
 
     chart_debuts = alt.Chart(df_debut_full).mark_bar(color='#1E1E1E').encode(
         x=alt.X('debut:O', title='Año de Debut', axis=alt.Axis(labelAngle=0, labelColor='#000000', titleColor='#000000', labelOpacity=1)),
