@@ -1,0 +1,16 @@
+name: Keep Streamlit App Alive
+
+on:
+  schedule:
+    # Se ejecuta todos los días a las 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  ping-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit App
+        run: |
+          # Hace una petición GET a tu app para simular actividad
+          curl -s -o /dev/null -w "%{http_code}\n" https://canteranos-colo-colo.streamlit.app/
