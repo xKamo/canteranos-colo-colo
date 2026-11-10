@@ -1,11 +1,5 @@
 name: Actualizar Datos de FBref Mensualmente
 
-on:
-  schedule:
-    # Se ejecuta el día 1 de cada mes a las 00:00 UTC
-    - cron: '0 0 1 * *'
-  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
-
 jobs:
   update-data:
     runs-on: ubuntu-latest
