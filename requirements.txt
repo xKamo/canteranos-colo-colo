@@ -1,6 +1,5 @@
 streamlit
 pandas
 altair
-requests
-beautifulsoup4
+cloudscraper
 lxml

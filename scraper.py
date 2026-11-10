@@ -1,32 +1,30 @@
 import pandas as pd
-import requests
 from io import StringIO
 import os
 import time
-from datetime import datetime
+import cloudscraper
 
 # --- CONFIGURACIÓN ---
 URL_FBREF = "https://fbref.com/en/squads/09799d9a/2026/Colo-Colo-Stats"
 RUTA_DATA = "data/data.csv"
 
 def extraer_tabla_fbref():
-    """Extrae la tabla de 'Playing Time' desde FBref, manejando comentarios HTML."""
-    print("Conectando a FBref...")
+    """Extrae la tabla de 'Playing Time' desde FBref usando cloudscraper."""
+    print("Conectando a FBref con cloudscraper...")
 
-    # --- SOLUCIÓN AL BLOQUEO: Cabeceras de navegador real ---
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
-    }
+    scraper = cloudscraper.create_scraper(
+        browser={
+            'browser': 'chrome',
+            'platform': 'windows',
+            'desktop': True
+        }
+    )
 
     try:
-        # Hacemos la petición con las cabeceras y un timeout de 15 seg
-        response = requests.get(URL_FBREF, headers=headers, timeout=15)
+        response = scraper.get(URL_FBREF, timeout=30)
 
-        # Si FBref nos bloquea, esto lanzará un error explícito
         if response.status_code == 403:
-            print("Error 403: FBref bloqueó la petición. Intenta de nuevo más tarde.")
+            print("Error 403: Cloudflare sigue bloqueando.")
             return None
 
         response.raise_for_status()
@@ -42,11 +40,8 @@ def extraer_tabla_fbref():
 
         return tablas[0]
 
-    except requests.exceptions.RequestException as e:
-        print(f"Error de conexión: {e}")
-        return None
-    except ValueError as e:
-        print(f"Error al parsear HTML (posible cambio en FBref): {e}")
+    except Exception as e:
+        print(f"Error durante la extracción: {e}")
         return None
 
 def limpiar_y_agregar_datos(tabla_cruda):
@@ -60,7 +55,7 @@ def limpiar_y_agregar_datos(tabla_cruda):
     df = df[['Player', 'Pos', 'Age', 'Min']]
     df.columns = ['jugador', 'posicion', 'edad', 'minutos']
 
-    # Limpiar la columna 'edad'
+    # Limpiar la columna 'edad' (FBref a veces usa "25-123" para años-días)
     df['edad'] = df['edad'].astype(str).str.split('-').str[0]
     df['edad'] = pd.to_numeric(df['edad'], errors='coerce').fillna(0).astype(int)
 
@@ -68,10 +63,10 @@ def limpiar_y_agregar_datos(tabla_cruda):
     df['minutos'] = df['minutos'].astype(str).str.replace(',', '', regex=False)
     df['minutos'] = pd.to_numeric(df['minutos'], errors='coerce').fillna(0).astype(int)
 
-    # Agregar la columna 'temporada'
-    df['temporada'] = 2026 # Dejamos el año fijo para evitar problemas si el robot corre en enero
+    # Agregar la columna 'temporada' (fijada en 2026 para este ejemplo)
+    df['temporada'] = 2026
 
-    # Filtrar filas de totales
+    # Filtrar filas de totales del equipo
     df = df[~df['jugador'].astype(str).str.contains('Total|Squad', case=False, na=False)]
 
     return df
@@ -83,19 +78,19 @@ def actualizar_csv(df_nuevo):
 
     if os.path.exists(RUTA_DATA):
         df_existente = pd.read_csv(RUTA_DATA, encoding='utf-8-sig')
-        # Borramos la temporada que vamos a actualizar para no duplicar
+        # Borramos la temporada actual para reemplazarla con los datos frescos
         df_existente = df_existente[df_existente['temporada'] != df_nuevo['temporada'].iloc[0]]
 
         df_final = pd.concat([df_existente, df_nuevo], ignore_index=True)
         df_final.to_csv(RUTA_DATA, index=False, encoding='utf-8-sig')
-        print(f"Datos de la temporada {df_nuevo['temporada'].iloc[0]} actualizados en {RUTA_DATA}")
+        print(f"Datos de la temporada {df_nuevo['temporada'].iloc[0]} actualizados.")
     else:
         df_nuevo.to_csv(RUTA_DATA, index=False, encoding='utf-8-sig')
-        print("Archivo data.csv creado con los primeros datos.")
+        print("Archivo data.csv creado.")
 
 def main():
     print("Iniciando pipeline ETL...")
-    time.sleep(2) # Pequeña pausa para no saturar el servidor
+    time.sleep(3)
     tabla = extraer_tabla_fbref()
 
     if tabla is not None:
@@ -103,7 +98,7 @@ def main():
         actualizar_csv(df_limpio)
     else:
         print("El pipeline falló al extraer la tabla. Revisa los logs.")
-        exit(1) # Forzar el error para que GitHub Actions lo marque como fallido
+        exit(1) # Fuerza el error en GitHub Actions
 
 if __name__ == "__main__":
     main()
