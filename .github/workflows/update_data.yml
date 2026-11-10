@@ -1,4 +1,7 @@
-name: Actualizar Datos de FBref Mensualmente
+name: Actualizar Datos de FBref (Manual)
+
+on:
+  workflow_dispatch: # Solo se activa si tú lo ejecutas manualmente desde GitHub
 
 jobs:
   update-data:
