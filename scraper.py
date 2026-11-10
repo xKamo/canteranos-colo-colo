@@ -2,71 +2,90 @@ import pandas as pd
 import requests
 from io import StringIO
 import os
+import time
 from datetime import datetime
 
 # --- CONFIGURACIÓN ---
-# URL de la tabla "Playing Time" de Colo-Colo en FBref para la temporada actual
-# NOTA: Debes reemplazar '2026' por el año de la temporada que quieres trackear.
-# FBref usa el año de finalización de la temporada (ej. 2026 para la 2025-2026).
 URL_FBREF = "https://fbref.com/en/squads/09799d9a/2026/Colo-Colo-Stats"
 RUTA_DATA = "data/data.csv"
-RUTA_JUGADORES = "data/jugadores.csv"
 
 def extraer_tabla_fbref():
     """Extrae la tabla de 'Playing Time' desde FBref, manejando comentarios HTML."""
     print("Conectando a FBref...")
-    response = requests.get(URL_FBREF)
-    response.raise_for_status()
 
-    # FBref a veces comenta las tablas. Eliminamos los tags de comentario.
-    html_limpio = response.text.replace('<!--', '').replace('-->', '')
+    # --- SOLUCIÓN AL BLOQUEO: Cabeceras de navegador real ---
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+    }
 
-    # Buscamos la tabla por su ID. En la página de un equipo, el id suele ser "stats_playing_time"
     try:
-        tabla = pd.read_html(StringIO(html_limpio), attrs={'id': 'stats_playing_time'})[0]
-    except ValueError:
-        print("No se encontró la tabla 'stats_playing_time'. La estructura de FBref pudo haber cambiado.")
+        # Hacemos la petición con las cabeceras y un timeout de 15 seg
+        response = requests.get(URL_FBREF, headers=headers, timeout=15)
+
+        # Si FBref nos bloquea, esto lanzará un error explícito
+        if response.status_code == 403:
+            print("Error 403: FBref bloqueó la petición. Intenta de nuevo más tarde.")
+            return None
+
+        response.raise_for_status()
+
+        # Eliminamos los tags de comentario que esconde FBref
+        html_limpio = response.text.replace('<!--', '').replace('-->', '')
+
+        # Buscamos la tabla por su ID
+        tablas = pd.read_html(StringIO(html_limpio), attrs={'id': 'stats_playing_time'})
+        if not tablas:
+            print("No se encontró la tabla 'stats_playing_time'.")
+            return None
+
+        return tablas[0]
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error de conexión: {e}")
+        return None
+    except ValueError as e:
+        print(f"Error al parsear HTML (posible cambio en FBref): {e}")
         return None
 
-    return tabla
-
 def limpiar_y_agregar_datos(tabla_cruda):
-    """Limpia y transforma la tabla de FBref para que coincida con tu data.csv."""
     if tabla_cruda is None:
-        return
+        return None
 
     print("Limpiando datos...")
     df = tabla_cruda.copy()
 
-    # Seleccionar y renombrar columnas para que coincidan con tu CSV
+    # Seleccionar y renombrar columnas
     df = df[['Player', 'Pos', 'Age', 'Min']]
     df.columns = ['jugador', 'posicion', 'edad', 'minutos']
 
-    # Limpiar la columna 'edad' (FBref a veces la formatea como "25-123")
+    # Limpiar la columna 'edad'
     df['edad'] = df['edad'].astype(str).str.split('-').str[0]
     df['edad'] = pd.to_numeric(df['edad'], errors='coerce').fillna(0).astype(int)
 
-    # Limpiar 'minutos' (por si trae comas o valores nulos)
+    # Limpiar 'minutos'
     df['minutos'] = df['minutos'].astype(str).str.replace(',', '', regex=False)
     df['minutos'] = pd.to_numeric(df['minutos'], errors='coerce').fillna(0).astype(int)
 
-    # Agregar la columna 'temporada' (usamos el año en curso)
-    df['temporada'] = datetime.now().year
+    # Agregar la columna 'temporada'
+    df['temporada'] = 2026 # Dejamos el año fijo para evitar problemas si el robot corre en enero
 
-    # Filtrar filas que sean totales del equipo (a veces FBref agrega una fila "Squad Total")
+    # Filtrar filas de totales
     df = df[~df['jugador'].astype(str).str.contains('Total|Squad', case=False, na=False)]
 
     return df
 
 def actualizar_csv(df_nuevo):
-    """Agrega los nuevos datos al data.csv existente, evitando duplicados."""
+    if df_nuevo is None or df_nuevo.empty:
+        print("No hay datos nuevos para guardar.")
+        return
+
     if os.path.exists(RUTA_DATA):
         df_existente = pd.read_csv(RUTA_DATA, encoding='utf-8-sig')
-
-        # Si ya existen datos para esta temporada, los reemplazamos para evitar duplicados
+        # Borramos la temporada que vamos a actualizar para no duplicar
         df_existente = df_existente[df_existente['temporada'] != df_nuevo['temporada'].iloc[0]]
 
-        # Concatenar y guardar
         df_final = pd.concat([df_existente, df_nuevo], ignore_index=True)
         df_final.to_csv(RUTA_DATA, index=False, encoding='utf-8-sig')
         print(f"Datos de la temporada {df_nuevo['temporada'].iloc[0]} actualizados en {RUTA_DATA}")
@@ -76,12 +95,15 @@ def actualizar_csv(df_nuevo):
 
 def main():
     print("Iniciando pipeline ETL...")
+    time.sleep(2) # Pequeña pausa para no saturar el servidor
     tabla = extraer_tabla_fbref()
+
     if tabla is not None:
         df_limpio = limpiar_y_agregar_datos(tabla)
         actualizar_csv(df_limpio)
     else:
-        print("El pipeline falló al extraer la tabla.")
+        print("El pipeline falló al extraer la tabla. Revisa los logs.")
+        exit(1) # Forzar el error para que GitHub Actions lo marque como fallido
 
 if __name__ == "__main__":
     main()
