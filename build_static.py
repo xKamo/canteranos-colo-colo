@@ -13,38 +13,56 @@ BASE = Path(__file__).parent
 data = pd.read_csv(BASE / "data" / "data.csv")
 jugadores = pd.read_csv(BASE / "data" / "jugadores.csv")
 
-# Unir para tener la columna canterano en un solo DataFrame
-df = data.merge(jugadores[["jugador", "canterano"]], on="jugador", how="left")
-df["canterano"] = df["canterano"].fillna(False).astype(bool)
+# Limpiar nombres para el merge (quitar años de nacimiento como "(1986)")
+jugadores["merge_name"] = jugadores["jugador"].str.replace(r"\s*\(\d{4}\)", "", regex=True).str.strip()
+data["merge_name"] = data["jugador"].str.replace(r"\s*\(\d{4}\)", "", regex=True).str.strip()
+
+# Hacemos el merge usando los nombres limpios
+df = data.merge(jugadores[["merge_name", "canterano"]], on="merge_name", how="left")
+
+# Fix definitivo: Convertir "SI" a True y "NO" a False
+df["canterano"] = (
+    df["canterano"]
+    .astype(str)
+    .str.strip()
+    .str.upper()
+    .map({"SI": True, "NO": False})
+    .fillna(False)
+)
+
+df["tipo_jugador"] = df["canterano"].map({True: "Canterano", False: "No Canterano"})
 
 # ---------------------------------------------------------------
 # 2. Parámetro de selección compartido (cross-filter)
 # ---------------------------------------------------------------
-# Selección por intervalo en el eje X del gráfico de área.
-# Al arrastrar sobre el área, se filtran los demás gráficos.
 brush = alt.selection_interval(encodings=["x"], name="brush")
 
 # ---------------------------------------------------------------
-# 3. Definir cada vista como un objeto Altair
+# 3. Definir cada vista
 # ---------------------------------------------------------------
 
-# 3.1 Área: minutos totales por temporada, separado por canterano/no canterano
+# 3.1 Área
 area = (
     alt.Chart(df)
     .mark_area(opacity=0.7)
     .encode(
         x=alt.X("temporada:O", title="Temporada"),
-        y=alt.Y("sum(minutos):Q", title="Minutos totales"),
-        color=alt.Color("canterano:N", title="Canterano"),
-        tooltip=["temporada:O", "canterano:N", "sum(minutos):Q"],
+        y=alt.Y("sum(minutos):Q", title="Minutos totales", stack="zero"),
+        color=alt.Color("tipo_jugador:N", title="Tipo de jugador"),
+        tooltip=[
+            alt.Tooltip("temporada:O", title="Temporada"),
+            alt.Tooltip("tipo_jugador:N", title="Tipo"),
+            alt.Tooltip("sum(minutos):Q", title="Minutos totales")
+        ],
     )
-    .add_params(brush)  # el área es el controlador del cross-filter
+    .add_params(brush)
     .properties(width=700, height=300, title="Minutos por temporada")
 )
 
-# 3.2 Top 10 histórico (barras horizontales)
+# 3.2 Top 10 histórico (Filtro ANTES de agrupar)
 top10 = (
     alt.Chart(df)
+    .transform_filter(brush)
     .transform_aggregate(total="sum(minutos)", groupby=["jugador"])
     .transform_window(rank="rank()", sort=[alt.SortField("total", order="descending")])
     .transform_filter(alt.datum.rank <= 10)
@@ -52,31 +70,39 @@ top10 = (
     .encode(
         x=alt.X("total:Q", title="Minutos totales"),
         y=alt.Y("jugador:N", sort="-x", title="Jugador"),
-        tooltip=["jugador:N", "total:Q"],
+        tooltip=[
+            alt.Tooltip("jugador:N", title="Jugador"),
+            alt.Tooltip("total:Q", title="Minutos totales")
+        ],
     )
-    .transform_filter(brush)  # se filtra según la selección del área
     .properties(width=700, height=300, title="Top 10 histórico (filtrable)")
 )
 
-# 3.3 Distribución por posición (barras apiladas)
+# 3.3 Distribución por posición (Filtro ANTES de agrupar)
 posicion = (
     alt.Chart(df)
+    .transform_filter(brush)
     .mark_bar()
     .encode(
         x=alt.X("posicion:N", title="Posición"),
         y=alt.Y("sum(minutos):Q", title="Minutos totales"),
-        color=alt.Color("canterano:N", title="Canterano"),
-        tooltip=["posicion:N", "canterano:N", "sum(minutos):Q"],
+        color=alt.Color("tipo_jugador:N", title="Tipo de jugador"),
+        tooltip=[
+            alt.Tooltip("posicion:N", title="Posición"),
+            alt.Tooltip("tipo_jugador:N", title="Tipo"),
+            alt.Tooltip("sum(minutos):Q", title="Minutos totales")
+        ],
     )
-    .transform_filter(brush)
     .properties(width=700, height=300, title="Distribución por posición")
 )
 
-# 3.4 Debuts por año (barras simples)
-# Necesitamos una fila por jugador con su año de debut
+# 3.4 Debuts por año (estático)
+# Extraemos el año usando regex (busca 4 dígitos seguidos) para evitar que Pandas
+# interprete mal las fechas o devuelva 1970.
 debuts = (
     jugadores.dropna(subset=["debut"])
-    .assign(anio_debut=lambda x: pd.to_datetime(x["debut"]).dt.year)
+    .assign(anio_debut=lambda x: x["debut"].astype(str).str.extract(r'(\d{4})')[0])
+    .dropna(subset=["anio_debut"]) # Por si algún dato no tenía año
     .groupby("anio_debut", as_index=False)
     .size()
     .rename(columns={"size": "cantidad"})
@@ -84,42 +110,36 @@ debuts = (
 
 debut_chart = (
     alt.Chart(debuts)
-    .mark_bar()
+    .mark_bar(color="#4c78a8")
     .encode(
         x=alt.X("anio_debut:O", title="Año de debut"),
         y=alt.Y("cantidad:Q", title="Jugadores que debutaron"),
-        tooltip=["anio_debut:O", "cantidad:Q"],
+        tooltip=[
+            alt.Tooltip("anio_debut:O", title="Año"),
+            alt.Tooltip("cantidad:Q", title="Cantidad")
+        ],
     )
     .properties(width=700, height=250, title="Debuts por año")
 )
 
 # ---------------------------------------------------------------
-# 4. Componer el dashboard (concatenación vertical + cross-filter)
+# 4. Componer y exportar
 # ---------------------------------------------------------------
-# El brush se declara en 'area'; los demás gráficos lo usan en transform_filter.
-# Altair resuelve la vinculación automáticamente al concatenar.
-
 dashboard = alt.vconcat(
     area,
     alt.hconcat(top10, posicion),
     debut_chart,
-).resolve_scale(color="independent")  # colores independientes por vista
+).resolve_scale(color="independent")
 
-# ---------------------------------------------------------------
-# 5. Exportar HTML autónomo a docs/index.html
-# ---------------------------------------------------------------
 OUT = BASE / "docs"
 OUT.mkdir(exist_ok=True)
 
-# inline=True incrusta Vega, Vega-Lite y vega-embed en el HTML.
-# Sin inline, se cargan desde CDN (archivo más liviano, requiere internet).
 dashboard.save(
     OUT / "index.html",
-    inline=True,          # autónomo; cambia a False si prefieres CDN
-    embed_options={"actions": False},  # oculta el menú de exportación de Vega
+    inline=True,
+    embed_options={"actions": False},
 )
 
-# Archivo necesario para que GitHub Pages no procese el sitio con Jekyll
 (OUT / ".nojekyll").write_text("")
 
 print(f"Generado: {OUT / 'index.html'}")
