@@ -1,7 +1,4 @@
 # build_static.py
-# Input:  data/data.csv, data/jugadores.csv, static/Logo_ColoColo.svg
-# Output: docs/index.html, docs/Logo_ColoColo.svg
-
 import shutil
 from pathlib import Path
 import altair as alt
@@ -14,14 +11,11 @@ BASE = Path(__file__).parent
 data = pd.read_csv(BASE / "data" / "data.csv")
 jugadores = pd.read_csv(BASE / "data" / "jugadores.csv")
 
-# Limpiar nombres para el merge (quitar años de nacimiento como "(1986)")
 jugadores["merge_name"] = jugadores["jugador"].str.replace(r"\s*\(\d{4}\)", "", regex=True).str.strip()
 data["merge_name"] = data["jugador"].str.replace(r"\s*\(\d{4}\)", "", regex=True).str.strip()
 
-# Hacemos el merge usando los nombres limpios
 df = data.merge(jugadores[["merge_name", "canterano"]], on="merge_name", how="left")
 
-# Fix definitivo: Convertir "SI" a True y "NO" a False
 df["canterano"] = (
     df["canterano"]
     .astype(str)
@@ -34,13 +28,9 @@ df["canterano"] = (
 df["tipo_jugador"] = df["canterano"].map({True: "Canterano", False: "No Canterano"})
 df["temporada_str"] = df["temporada"].astype(str).str.strip()
 
-# Subconjunto de jugadores canteranos (para debuts)
 canteranos_jugadores = jugadores[jugadores["canterano"].str.upper() == "SI"]
-
-# Subconjunto de minutos de canteranos (para el gráfico de posiciones)
 canteranos_df = df[df["tipo_jugador"] == "Canterano"]
 
-# Subconjunto de canteranos en temporada 2026 (minutos por jugador)
 canteranos_2026_df = (
     canteranos_df[canteranos_df["temporada_str"].str.contains("2026", na=False)]
     .groupby("jugador", as_index=False)["minutos"]
@@ -49,7 +39,7 @@ canteranos_2026_df = (
 )
 
 # ---------------------------------------------------------------
-# 2. Paleta de colores (Escala de grises)
+# 2. Paleta y Formatos
 # ---------------------------------------------------------------
 GRIS_OSCURO = "#1A1A1A"
 GRIS_CLARO = "#9E9E9E"
@@ -60,16 +50,16 @@ color_scale = alt.Scale(
     range=[GRIS_OSCURO, GRIS_CLARO]
 )
 
-# Formato entero con separador de miles (aplica formatLocale -> ".")
+# Forzamos el formato de Vega-Lite (d3-format).
 FMT_ENTERO = ",.0f"
 
 # ---------------------------------------------------------------
-# 3. Parámetro de selección compartido (cross-filter)
+# 3. Cross-filter
 # ---------------------------------------------------------------
 brush = alt.selection_interval(encodings=["x"], name="brush")
 
 # ---------------------------------------------------------------
-# 4. Definir cada vista
+# 4. Vistas
 # ---------------------------------------------------------------
 
 # 4.1 Área
@@ -78,7 +68,9 @@ area = (
     .mark_area(opacity=0.85)
     .encode(
         x=alt.X("temporada:O", title="Temporada"),
-        y=alt.Y("sum(minutos):Q", title="Minutos totales", stack="zero", axis=alt.Axis(format=FMT_ENTERO)),
+        # Usamos labelExpr para forzar el formato en el eje Y
+        y=alt.Y("sum(minutos):Q", title="Minutos totales", stack="zero",
+                axis=alt.Axis(labelExpr="format(datum.value, ',.0f')")),
         color=alt.Color("tipo_jugador:N", title="Tipo de jugador", scale=color_scale),
         order=alt.Order("tipo_jugador", sort="ascending"),
         tooltip=[
@@ -91,7 +83,7 @@ area = (
     .properties(width=780, height=280, title="Minutos por temporada")
 )
 
-# 4.2 Top 10 histórico (SOLO CANTERANOS)
+# 4.2 Top 10
 top10 = (
     alt.Chart(df)
     .transform_filter(brush)
@@ -101,7 +93,8 @@ top10 = (
     .transform_filter(alt.datum.rank <= 10)
     .mark_bar(color=GRIS_BARRAS)
     .encode(
-        x=alt.X("total:Q", title="Minutos totales", axis=alt.Axis(format=FMT_ENTERO, tickCount=5)),
+        x=alt.X("total:Q", title="Minutos totales",
+                axis=alt.Axis(labelExpr="format(datum.value, ',.0f')", tickCount=5)),
         y=alt.Y("jugador:N", sort="-x", title="Jugador"),
         tooltip=[
             alt.Tooltip("jugador:N", title="Jugador"),
@@ -111,7 +104,7 @@ top10 = (
     .properties(width=360, height=280, title="Top 10 Canteranos")
 )
 
-# 4.3 Distribución por posición (SOLO CANTERANOS)
+# 4.3 Posiciones
 pos_order = (
     canteranos_df.groupby("posicion")["minutos"]
     .sum()
@@ -125,32 +118,34 @@ posicion = (
     .mark_bar(color=GRIS_BARRAS)
     .encode(
         x=alt.X("posicion:N", title="Posición", sort=pos_order),
-        y=alt.Y("sum(minutos):Q", title="Minutos totales", axis=alt.Axis(format=FMT_ENTERO)),
+        y=alt.Y("sum(minutos):Q", title="Minutos totales",
+                axis=alt.Axis(labelExpr="format(datum.value, ',.0f')")),
         tooltip=[
             alt.Tooltip("posicion:N", title="Posición"),
             alt.Tooltip("sum(minutos):Q", title="Minutos totales", format=FMT_ENTERO),
         ],
     )
-    .properties(width=360, height=280, title="Distribución de Canteranos por Posición")
+    .properties(width=360, height=280, title="Distribución por Posición")
 )
 
-# 4.4 Comparador Canteranos 2026 (Minutos jugados por jugador)
+# 4.4 Canteranos 2026
 alto_2026 = max(200, len(canteranos_2026_df) * 26)
 canteranos_2026 = (
     alt.Chart(canteranos_2026_df)
     .mark_bar(color=GRIS_BARRAS)
     .encode(
-        x=alt.X("minutos:Q", title="Minutos jugados (2026)", axis=alt.Axis(format=FMT_ENTERO, tickCount=5)),
+        x=alt.X("minutos:Q", title="Minutos jugados (2026)",
+                axis=alt.Axis(labelExpr="format(datum.value, ',.0f')", tickCount=5)),
         y=alt.Y("jugador:N", sort="-x", title="Jugador"),
         tooltip=[
             alt.Tooltip("jugador:N", title="Jugador"),
-            alt.Tooltip("minutos:Q", title="Minutos jugados (2026)", format=FMT_ENTERO),
+            alt.Tooltip("minutos:Q", title="Minutos jugados", format=FMT_ENTERO),
         ],
     )
     .properties(width=780, height=alto_2026, title="Canteranos 2026: Minutos por jugador")
 )
 
-# 4.5 Debuts por año (SOLO CANTERANOS) - Usando canteranos_jugadores
+# 4.5 Debuts
 debuts = (
     canteranos_jugadores.dropna(subset=["debut"])
     .assign(anio_debut=lambda x: x["debut"].astype(str).str.extract(r"(\d{4})")[0])
@@ -165,17 +160,17 @@ debut_chart = (
     .mark_bar(color=GRIS_BARRAS)
     .encode(
         x=alt.X("anio_debut:O", title="Año de debut"),
-        y=alt.Y("cantidad:Q", title="Jugadores que debutaron", axis=alt.Axis(format=FMT_ENTERO)),
+        y=alt.Y("cantidad:Q", title="Jugadores que debutaron", axis=alt.Axis(format="d")),
         tooltip=[
             alt.Tooltip("anio_debut:O", title="Año"),
-            alt.Tooltip("cantidad:Q", title="Cantidad", format=FMT_ENTERO),
+            alt.Tooltip("cantidad:Q", title="Cantidad", format="d"),
         ],
     )
     .properties(width=780, height=240, title="Debuts de canteranos por año")
 )
 
 # ---------------------------------------------------------------
-# 5. Componer dashboard y estilos
+# 5. Dashboard
 # ---------------------------------------------------------------
 dashboard = (
     alt.vconcat(
@@ -206,7 +201,7 @@ dashboard = (
 )
 
 # ---------------------------------------------------------------
-# 6. Generar HTML y exportar
+# 6. Exportación HTML
 # ---------------------------------------------------------------
 OUT = BASE / "docs"
 OUT.mkdir(exist_ok=True)
@@ -232,10 +227,10 @@ html_template = f"""<!DOCTYPE html>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {{
-            --fondo: #F5F5F5;
-            --texto: #1A1A1A;
+            --fondo: #F8F9FA;
+            --texto: #212529;
             --gris: #6C757D;
-            --sombra: 0 4px 20px rgba(0, 0, 0, 0.05);
+            --sombra: 0 4px 24px rgba(0, 0, 0, 0.04);
         }}
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
@@ -243,41 +238,51 @@ html_template = f"""<!DOCTYPE html>
             background: var(--fondo);
             color: var(--texto);
             line-height: 1.6;
-            padding: 1.5rem 1rem;
+            padding: 2rem 1rem;
         }}
         .container {{
-            max-width: 900px;
+            max-width: 920px;
             margin: 0 auto;
         }}
         header {{
             display: flex;
             align-items: center;
             gap: 1.5rem;
-            margin-bottom: 1.25rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid #E0E0E0;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #DEE2E6;
         }}
         header img {{
-            height: 65px;
+            height: 70px;
             width: auto;
+            object-fit: contain;
+            /* Sombra sutil al logo para darle profundidad */
+            filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.1));
         }}
         header h1 {{
-            font-size: 1.75rem;
+            font-size: 1.85rem;
             font-weight: 700;
             color: var(--texto);
-            letter-spacing: -0.02em;
+            letter-spacing: -0.03em;
+            margin-bottom: 0.2rem;
         }}
         header p {{
-            font-size: 0.95rem;
+            font-size: 1rem;
             color: var(--gris);
-            font-weight: 300;
+            font-weight: 400;
+        }}
+        .intro {{
+            font-size: 0.95rem;
+            color: #495057;
+            margin-bottom: 1.5rem;
+            line-height: 1.7;
         }}
         .card {{
             background: #FFFFFF;
-            border-radius: 16px;
+            border-radius: 12px;
             box-shadow: var(--sombra);
-            padding: 0.75rem 1.25rem 1.25rem;
-            margin-bottom: 1.5rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
             overflow-x: auto;
         }}
         .card .vega-embed {{
@@ -290,23 +295,25 @@ html_template = f"""<!DOCTYPE html>
             display: none;
         }}
         .nota {{
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             color: var(--gris);
-            margin-top: 0.75rem;
-            padding: 0.75rem 1rem;
+            margin-top: 1.5rem;
+            padding: 1rem;
             background: #F8F9FA;
-            border-left: 3px solid #BDBDBD;
-            border-radius: 4px;
+            border-left: 4px solid #ADB5BD;
+            border-radius: 0 4px 4px 0;
         }}
         footer {{
             text-align: center;
-            margin-top: 2rem;
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #DEE2E6;
             font-size: 0.85rem;
             color: var(--gris);
         }}
         @media (max-width: 768px) {{
             header {{ flex-direction: column; text-align: center; }}
-            header h1 {{ font-size: 1.4rem; }}
+            header h1 {{ font-size: 1.5rem; }}
         }}
     </style>
 </head>
@@ -316,19 +323,23 @@ html_template = f"""<!DOCTYPE html>
             <img src="Logo_ColoColo.svg" alt="Escudo Colo-Colo">
             <div>
                 <h1>Canteranos Colo-Colo</h1>
-                <p>Minutos jugados en Torneo Nacional - Liga de Primera · 2017–2026.</p>
+                <p>Minutos en Torneo Nacional (Liga de Primera) · 2017–2026</p>
             </div>
         </header>
+
+        <div class="intro">
+            <p>Análisis del protagonismo de los jugadores formados en casa. El siguiente dashboard compara los minutos totales otorgados al plantel de honor, destacando la evolución y la distribución de los canteranos a lo largo de las últimas 10 temporadas.</p>
+        </div>
 
         <div class="card">
             {chart_html}
             <div class="nota">
-                <strong>Nota:</strong> El peak de 2021 se explica por el brote de COVID-19 en el plantel, que obligó a Colo-Colo a alinear a numerosos juveniles (sub-18) ante Audax Italiano y Ñublense, debido a los 7 contagios y 44 contactos estrechos que dejaron al equipo diezmado.
+                <strong>Nota histórica:</strong> El peak de minutos y debuts en 2021 se explica por el brote de COVID-19 en el plantel, que obligó a Colo-Colo a alinear a numerosos juveniles (sub-18) ante Audax Italiano y Ñublense, debido a los contagios y contactos estrechos que dejaron al equipo diezmado.
             </div>
         </div>
 
         <footer>
-            Datos: FBref · Canteranos: Transfermarkt y prensa chilena · Proyecto de portafolio
+            Fuente de datos: FBref (minutos) · Transfermarkt y prensa chilena (canteranos) · Proyecto de portafolio por Camilo Escandar
         </footer>
     </div>
 </body>
