@@ -1,11 +1,11 @@
 # build_static.py
-# Input:  data/data.csv, data/jugadores.csv, static/logo.png
-# Output: docs/index.html, docs/logo.png
+# Input:  data/data.csv, data/jugadores.csv, static/Logo_ColoColo.svg
+# Output: docs/index.html, docs/Logo_ColoColo.svg
 
-import pandas as pd
-import altair as alt
-from pathlib import Path
 import shutil
+from pathlib import Path
+import altair as alt
+import pandas as pd
 
 # ---------------------------------------------------------------
 # 1. Cargar datos
@@ -32,12 +32,21 @@ df["canterano"] = (
 )
 
 df["tipo_jugador"] = df["canterano"].map({True: "Canterano", False: "No Canterano"})
+df["temporada_str"] = df["temporada"].astype(str).str.strip()
 
 # Subconjunto de jugadores canteranos (para debuts)
 canteranos_jugadores = jugadores[jugadores["canterano"].str.upper() == "SI"]
 
 # Subconjunto de minutos de canteranos (para el gráfico de posiciones)
 canteranos_df = df[df["tipo_jugador"] == "Canterano"]
+
+# Subconjunto de canteranos en temporada 2026 (minutos por jugador)
+canteranos_2026_df = (
+    canteranos_df[canteranos_df["temporada_str"].str.contains("2026", na=False)]
+    .groupby("jugador", as_index=False)["minutos"]
+    .sum()
+    .sort_values("minutos", ascending=False)
+)
 
 # ---------------------------------------------------------------
 # 2. Paleta de colores (Escala de grises)
@@ -50,6 +59,9 @@ color_scale = alt.Scale(
     domain=["Canterano", "No Canterano"],
     range=[GRIS_OSCURO, GRIS_CLARO]
 )
+
+# Formato entero con separador de miles (aplica formatLocale -> ".")
+FMT_ENTERO = ",.0f"
 
 # ---------------------------------------------------------------
 # 3. Parámetro de selección compartido (cross-filter)
@@ -66,17 +78,17 @@ area = (
     .mark_area(opacity=0.85)
     .encode(
         x=alt.X("temporada:O", title="Temporada"),
-        y=alt.Y("sum(minutos):Q", title="Minutos totales", stack="zero", axis=alt.Axis(format=",.0f")),
+        y=alt.Y("sum(minutos):Q", title="Minutos totales", stack="zero", axis=alt.Axis(format=FMT_ENTERO)),
         color=alt.Color("tipo_jugador:N", title="Tipo de jugador", scale=color_scale),
         order=alt.Order("tipo_jugador", sort="ascending"),
         tooltip=[
             alt.Tooltip("temporada:O", title="Temporada"),
             alt.Tooltip("tipo_jugador:N", title="Tipo"),
-            alt.Tooltip("sum(minutos):Q", title="Minutos totales", format=",.0f")
+            alt.Tooltip("sum(minutos):Q", title="Minutos totales", format=FMT_ENTERO),
         ],
     )
     .add_params(brush)
-    .properties(width=800, height=300, title="Minutos por temporada")
+    .properties(width=780, height=280, title="Minutos por temporada")
 )
 
 # 4.2 Top 10 histórico (SOLO CANTERANOS)
@@ -89,19 +101,20 @@ top10 = (
     .transform_filter(alt.datum.rank <= 10)
     .mark_bar(color=GRIS_BARRAS)
     .encode(
-        x=alt.X("total:Q", title="Minutos totales", axis=alt.Axis(format=",.0f", tickCount=5)),
+        x=alt.X("total:Q", title="Minutos totales", axis=alt.Axis(format=FMT_ENTERO, tickCount=5)),
         y=alt.Y("jugador:N", sort="-x", title="Jugador"),
         tooltip=[
             alt.Tooltip("jugador:N", title="Jugador"),
-            alt.Tooltip("total:Q", title="Minutos totales", format=",.0f")
+            alt.Tooltip("total:Q", title="Minutos totales", format=FMT_ENTERO),
         ],
     )
-    .properties(width=380, height=300, title="Top 10 Canteranos")
+    .properties(width=360, height=280, title="Top 10 Canteranos")
 )
 
 # 4.3 Distribución por posición (SOLO CANTERANOS)
 pos_order = (
-    canteranos_df.groupby("posicion")["minutos"].sum()
+    canteranos_df.groupby("posicion")["minutos"]
+    .sum()
     .sort_values(ascending=False)
     .index.tolist()
 )
@@ -112,19 +125,35 @@ posicion = (
     .mark_bar(color=GRIS_BARRAS)
     .encode(
         x=alt.X("posicion:N", title="Posición", sort=pos_order),
-        y=alt.Y("sum(minutos):Q", title="Minutos totales", axis=alt.Axis(format=",.0f")),
+        y=alt.Y("sum(minutos):Q", title="Minutos totales", axis=alt.Axis(format=FMT_ENTERO)),
         tooltip=[
             alt.Tooltip("posicion:N", title="Posición"),
-            alt.Tooltip("sum(minutos):Q", title="Minutos totales", format=",.0f")
+            alt.Tooltip("sum(minutos):Q", title="Minutos totales", format=FMT_ENTERO),
         ],
     )
-    .properties(width=380, height=300, title="Distribución de Canteranos por Posición")
+    .properties(width=360, height=280, title="Distribución de Canteranos por Posición")
 )
 
-# 4.4 Debuts por año (SOLO CANTERANOS) - Usando canteranos_jugadores
+# 4.4 Comparador Canteranos 2026 (Minutos jugados por jugador)
+alto_2026 = max(200, len(canteranos_2026_df) * 26)
+canteranos_2026 = (
+    alt.Chart(canteranos_2026_df)
+    .mark_bar(color=GRIS_BARRAS)
+    .encode(
+        x=alt.X("minutos:Q", title="Minutos jugados (2026)", axis=alt.Axis(format=FMT_ENTERO, tickCount=5)),
+        y=alt.Y("jugador:N", sort="-x", title="Jugador"),
+        tooltip=[
+            alt.Tooltip("jugador:N", title="Jugador"),
+            alt.Tooltip("minutos:Q", title="Minutos jugados (2026)", format=FMT_ENTERO),
+        ],
+    )
+    .properties(width=780, height=alto_2026, title="Canteranos 2026: Minutos por jugador")
+)
+
+# 4.5 Debuts por año (SOLO CANTERANOS) - Usando canteranos_jugadores
 debuts = (
     canteranos_jugadores.dropna(subset=["debut"])
-    .assign(anio_debut=lambda x: x["debut"].astype(str).str.extract(r'(\d{4})')[0])
+    .assign(anio_debut=lambda x: x["debut"].astype(str).str.extract(r"(\d{4})")[0])
     .dropna(subset=["anio_debut"])
     .groupby("anio_debut", as_index=False)
     .size()
@@ -136,37 +165,44 @@ debut_chart = (
     .mark_bar(color=GRIS_BARRAS)
     .encode(
         x=alt.X("anio_debut:O", title="Año de debut"),
-        y=alt.Y("cantidad:Q", title="Jugadores que debutaron", axis=alt.Axis(format=",.0f")),
+        y=alt.Y("cantidad:Q", title="Jugadores que debutaron", axis=alt.Axis(format=FMT_ENTERO)),
         tooltip=[
             alt.Tooltip("anio_debut:O", title="Año"),
-            alt.Tooltip("cantidad:Q", title="Cantidad", format=",.0f")
+            alt.Tooltip("cantidad:Q", title="Cantidad", format=FMT_ENTERO),
         ],
     )
-    .properties(width=800, height=250, title="Debuts de canteranos por año")
+    .properties(width=780, height=240, title="Debuts de canteranos por año")
 )
 
 # ---------------------------------------------------------------
 # 5. Componer dashboard y estilos
 # ---------------------------------------------------------------
-dashboard = alt.vconcat(
-    area,
-    alt.hconcat(top10, posicion),
-    debut_chart,
-).resolve_scale(color="independent").configure_view(
-    strokeWidth=0
-).configure_axis(
-    labelFont="Inter, sans-serif",
-    titleFont="Inter, sans-serif",
-    labelColor="#4A4A4A",
-    titleColor="#1A1A1A",
-    gridColor="#E0E0E0",
-    domainColor="#BDBDBD"
-).configure_title(
-    font="Inter, sans-serif",
-    color="#1A1A1A",
-    fontSize=16,
-    fontWeight=600,
-    anchor="middle"
+dashboard = (
+    alt.vconcat(
+        area,
+        alt.hconcat(top10, posicion, spacing=30),
+        canteranos_2026,
+        debut_chart,
+        spacing=28,
+    )
+    .resolve_scale(color="independent")
+    .properties(padding={"top": 4, "right": 12, "bottom": 8, "left": 12})
+    .configure_view(strokeWidth=0)
+    .configure_axis(
+        labelFont="Inter, sans-serif",
+        titleFont="Inter, sans-serif",
+        labelColor="#4A4A4A",
+        titleColor="#1A1A1A",
+        gridColor="#E0E0E0",
+        domainColor="#BDBDBD",
+    )
+    .configure_title(
+        font="Inter, sans-serif",
+        color="#1A1A1A",
+        fontSize=16,
+        fontWeight=600,
+        anchor="middle",
+    )
 )
 
 # ---------------------------------------------------------------
@@ -175,18 +211,16 @@ dashboard = alt.vconcat(
 OUT = BASE / "docs"
 OUT.mkdir(exist_ok=True)
 
-# Copiar logo a docs/
 shutil.copy(BASE / "static" / "Logo_ColoColo.svg", OUT / "Logo_ColoColo.svg")
 
 chart_html = dashboard.to_html(
     inline=True,
     embed_options={
         "actions": False,
-        "formatLocale": {"decimal": ",", "thousands": "."}
-    }
+        "formatLocale": {"decimal": ",", "thousands": "."},
+    },
 )
 
-# Plantilla HTML con subtítulo corregido y nota al pie
 html_template = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -209,7 +243,7 @@ html_template = f"""<!DOCTYPE html>
             background: var(--fondo);
             color: var(--texto);
             line-height: 1.6;
-            padding: 2rem 1rem;
+            padding: 1.5rem 1rem;
         }}
         .container {{
             max-width: 900px;
@@ -219,8 +253,8 @@ html_template = f"""<!DOCTYPE html>
             display: flex;
             align-items: center;
             gap: 1.5rem;
-            margin-bottom: 2.5rem;
-            padding-bottom: 1.5rem;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1rem;
             border-bottom: 2px solid #E0E0E0;
         }}
         header img {{
@@ -242,7 +276,7 @@ html_template = f"""<!DOCTYPE html>
             background: #FFFFFF;
             border-radius: 16px;
             box-shadow: var(--sombra);
-            padding: 1.5rem;
+            padding: 0.75rem 1.25rem 1.25rem;
             margin-bottom: 1.5rem;
             overflow-x: auto;
         }}
@@ -250,11 +284,15 @@ html_template = f"""<!DOCTYPE html>
             width: 100%;
             display: flex;
             justify-content: center;
+            align-items: flex-start;
+        }}
+        .card .vega-embed summary {{
+            display: none;
         }}
         .nota {{
             font-size: 0.8rem;
             color: var(--gris);
-            margin-top: 1rem;
+            margin-top: 0.75rem;
             padding: 0.75rem 1rem;
             background: #F8F9FA;
             border-left: 3px solid #BDBDBD;
@@ -262,7 +300,7 @@ html_template = f"""<!DOCTYPE html>
         }}
         footer {{
             text-align: center;
-            margin-top: 3rem;
+            margin-top: 2rem;
             font-size: 0.85rem;
             color: var(--gris);
         }}
